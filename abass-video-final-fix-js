@@ -1,0 +1,33 @@
+(function(){
+ const $=id=>document.getElementById(id);
+ const getUser=()=>{try{return typeof abassCurrentUser==='function'?abassCurrentUser():null}catch(e){return null}};
+ const getKey=()=>{const u=getUser();return u?String(u.userId||u.phone||u.email||u.id||'').trim():''};
+ const getDB=()=>{try{return window.firebase&&firebase.apps&&firebase.apps.length?firebase.database():null}catch(e){return null}};
+ const getStorage=()=>{try{return window.firebase&&firebase.apps&&firebase.apps.length?firebase.storage():null}catch(e){return null}};
+ function status(msg,ok){let b=$('abassVideoStatus');if(!b){b=document.createElement('div');b.id='abassVideoStatus';const c=document.querySelector('.home-video-modal-card');if(c)c.appendChild(b)}b.className=ok?'ok':'err';b.textContent=msg;b.style.display=msg?'block':'none'}
+ function cleanupMenus(){document.querySelectorAll('.side-drawer').forEach((x,i)=>{if(i)x.remove()});document.querySelectorAll('.drawer-overlay').forEach((x,i)=>{if(i)x.remove()})}
+ window.openHomeVideoPost=function(){const u=getUser();if(!u){alert('Please login first.');if(typeof showSection==='function')showSection('login');return}status('');const m=$('homeVideoPostModal');if(m)m.style.display='flex'};
+ window.closeHomeVideoPost=function(){const m=$('homeVideoPostModal');if(m)m.style.display='none';status('')};
+ window.postHomeVideoNow=async function(){
+  const u=getUser();if(!u){alert('Please login first.');return}
+  const f=$('homePostVideoFile')?.files?.[0];if(!f){status('Gallery  video select ।');return}
+  if(!/^video\//i.test(f.type)){status(' video file');return}
+  const cfg=Object.assign({enabled:true,allowUploads:true,maxUploadMB:100,maxItems:50},window.abassPrivateMediaCfg||{});
+  if(cfg.enabled===false||cfg.allowUploads===false){status(' video upload ');return}
+  const owner=getKey();if(!owner){status('#');return}
+  const max=Number(cfg.maxUploadMB||100)*1024*1024;if(f.size>max){status('Video : '+cfg.maxUploadMB+' MB.');return}
+  try{
+   const db=getDB();if(!db)throw new Error('#');
+   const root=db.ref('abass_private_videos/'+encodeURIComponent(owner));
+   const snap=await root.once('value');const existing=snap.val()||{};if(Object.keys(existing).length>=Number(cfg.maxItems||50))throw new Error('$');
+   const st=getStorage();if(!st)throw new Error('#');
+   const id='v_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),safe=f.name.replace(/[^a-zA-Z0-9._-]/g,'_'),path='abass_private_videos/'+encodeURIComponent(owner)+'/'+id+'_'+safe;
+   status('Uploading video…',true);
+   const ref=st.ref(path);await ref.put(f,{contentType:f.type||'video/mp4'});const url=await ref.getDownloadURL();
+   await root.child(id).set({userKey:owner,title:$('homePostVideoTitle')?.value?.trim()||f.name,type:'upload',url,storagePath:path,mime:f.type||'video/mp4',size:f.size,createdAt:firebase.database.ServerValue.TIMESTAMP,shareMode:($('homePostVideoVisibility')?.value||'public'),ownerUserId:owner,brandLogo:'ABASS TV',brandUserId:owner});
+   $('homePostVideoFile').value='';if($('homePostVideoTitle'))$('homePostVideoTitle').value='';const m=$('homeVideoPostModal');if(m)m.style.display='none';
+   if(typeof renderPrivateMediaUI==='function')renderPrivateMediaUI();if(typeof renderHomePrivateVideos==='function')renderHomePrivateVideos();alert('🎬 Video successfully post हो गई। '+(($('homePostVideoVisibility')?.value||'public')==='public'?'अब Home पर public दिखेगी।':'यह private रहेगी।'));
+  }catch(e){console.error('ABASS video post',e);status('Video post नहीं हो सकी:\n'+(e?.message||e)+'\n\nFirebase Storage bucket/rules भी check करें।')}
+ };
+ document.addEventListener('DOMContentLoaded',()=>{cleanupMenus();['homePostVideoPanel','homePrivateVideosCard','homeVideoPostModal'].forEach(id=>{document.querySelectorAll('#'+id).forEach((x,i)=>{if(i)x.remove()})});setTimeout(()=>{if(typeof renderPrivateMediaUI==='function')renderPrivateMediaUI();if(typeof renderHomePrivateVideos==='function')renderHomePrivateVideos()},900)});
+})();
